@@ -1,0 +1,9 @@
+git clone this repo
+install python 3.11
+uv sync
+
+
+install aws cli 
+run "aws configure" command 
+
+
