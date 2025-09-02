@@ -15,6 +15,9 @@ import time
 import pandas as pd
 import json
 import re
+import streamlit as st
+from transformers import pipeline
+from sentence_transformers import SentenceTransformer
 
 import numpy as np
 
@@ -547,3 +550,90 @@ def get_indexes(accounts, table_elements) -> list[dict]:
 
             print("Table cleaner component completed successfully")
     return relevant_tables
+
+
+
+def extract_text(uploaded_file, max_pages=10):
+    uploaded_file.seek(0)
+    doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    text = ""
+    for i, page in enumerate(doc):
+        if max_pages and i >= max_pages:
+            break
+        text += page.get_text("text") + "\n"
+    return text.strip()
+
+# # ---------------------- Load Models ----------------------
+# @st.cache_resource
+# def load_summarizer():
+#     return pipeline(
+#         "text2text-generation",
+#         model="MBZUAI/LaMini-Flan-T5-248M",
+#         tokenizer="MBZUAI/LaMini-Flan-T5-248M"
+#     )
+
+# @st.cache_resource
+# def load_embedder():
+#     return SentenceTransformer("all-MiniLM-L6-v2")
+
+# summarizer = load_summarizer()
+# embedder = load_embedder()
+
+# ---------------------- Chunking ----------------------
+def chunk_text(text, chunk_size=800, overlap=100):
+    words = text.split()
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk = words[i:i+chunk_size]
+        chunks.append(" ".join(chunk))
+        i += chunk_size - overlap
+    return chunks
+
+# ---------------------- Pros & Cons ----------------------
+def generate_pros_cons_from_chunks(chunks):
+    pros, cons = [], []
+
+    for chunk in chunks:
+        prompt = (
+            "Classify the following company disclosure text into strengths/opportunities "
+            "and risks/weaknesses. Provide concise bullet points. "
+            "Do not repeat statements. If nothing relevant, return 'None'.\n\n"
+            f"{chunk}"
+        )
+        result = summarizer(prompt, max_length=300, min_length=100, do_sample=False)
+        output = result[0].get("summary_text") or result[0].get("generated_text", "")
+
+        if "opportunity" in output.lower() or "strength" in output.lower():
+            pros.append(output)
+        if "risk" in output.lower() or "weakness" in output.lower():
+            cons.append(output)
+
+    return "\n".join(pros), "\n".join(cons)
+
+
+
+# ---------------------- Embeddings & Search ----------------------
+def build_vector_store(chunks, tables):
+    data = []
+
+    # text chunks
+    for i, ch in enumerate(chunks):
+        data.append({"id": f"text_{i}", "content": ch, "type": "text"})
+
+    # tables (flatten rows)
+    for ti, table in enumerate(tables):
+        for ri, row in enumerate(table):
+            row_str = " | ".join(str(c) for c in row if c)
+            data.append({"id": f"table_{ti}_{ri}", "content": row_str, "type": "table"})
+
+    texts = [d["content"] for d in data]
+    embeddings = embedder.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+    return data, embeddings
+
+def semantic_search(query, data, embeddings, top_k=3):
+    q_emb = embedder.encode([query], convert_to_numpy=True, normalize_embeddings=True)[0]
+    sims = np.dot(embeddings, q_emb)
+    top_idx = sims.argsort()[-top_k:][::-1]
+    return [data[i] for i in top_idx]
+

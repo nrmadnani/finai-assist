@@ -113,6 +113,7 @@ dependencies = [
     "st-files-connection>=0.1.0",
     "streamlit>=1.48.1",
     "pdf2image>=1.17.0",
+    "sentence-transformers>=5.1.0",
 ]
 
 [tool.uv]
