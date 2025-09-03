@@ -145,6 +145,9 @@ def invoke_bedrock(model_id: str, prompt: str, **kwargs
 
 
 
+
+def invoke_knowledge_base(knowledge_base_id: str, prompt: str, **kwargs) -> str:
+    pass
 def get_accounts(
     resolved_path, report_type=["Balance Sheet", "Income Statement", "Cash Flow"]
 ) -> list[dict]:
@@ -636,4 +639,3 @@ def semantic_search(query, data, embeddings, top_k=3):
     sims = np.dot(embeddings, q_emb)
     top_idx = sims.argsort()[-top_k:][::-1]
     return [data[i] for i in top_idx]
-

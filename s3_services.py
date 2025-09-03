@@ -5,7 +5,8 @@ import streamlit as st
 
 def get_s3_client():
     try:
-        s3_client = boto3.client('s3')
+        s3_client = boto3.client('s3', aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+                                 aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"], )
         return s3_client
     except NoCredentialsError:
         st.error("Credentials not available.")
