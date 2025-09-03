@@ -18,7 +18,6 @@ import re
 import streamlit as st
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
-
 import numpy as np
 
 
@@ -85,7 +84,8 @@ def invoke_bedrock(model_id: str, prompt: str, **kwargs
     Returns:
         Pydantic model instance
     """
-    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1", aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+                                 aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],)
 
     # --- Model-specific request building ---
     body = None
@@ -593,49 +593,3 @@ def chunk_text(text, chunk_size=800, overlap=100):
         i += chunk_size - overlap
     return chunks
 
-# ---------------------- Pros & Cons ----------------------
-def generate_pros_cons_from_chunks(chunks):
-    pros, cons = [], []
-
-    for chunk in chunks:
-        prompt = (
-            "Classify the following company disclosure text into strengths/opportunities "
-            "and risks/weaknesses. Provide concise bullet points. "
-            "Do not repeat statements. If nothing relevant, return 'None'.\n\n"
-            f"{chunk}"
-        )
-        result = summarizer(prompt, max_length=300, min_length=100, do_sample=False)
-        output = result[0].get("summary_text") or result[0].get("generated_text", "")
-
-        if "opportunity" in output.lower() or "strength" in output.lower():
-            pros.append(output)
-        if "risk" in output.lower() or "weakness" in output.lower():
-            cons.append(output)
-
-    return "\n".join(pros), "\n".join(cons)
-
-
-
-# ---------------------- Embeddings & Search ----------------------
-def build_vector_store(chunks, tables):
-    data = []
-
-    # text chunks
-    for i, ch in enumerate(chunks):
-        data.append({"id": f"text_{i}", "content": ch, "type": "text"})
-
-    # tables (flatten rows)
-    for ti, table in enumerate(tables):
-        for ri, row in enumerate(table):
-            row_str = " | ".join(str(c) for c in row if c)
-            data.append({"id": f"table_{ti}_{ri}", "content": row_str, "type": "table"})
-
-    texts = [d["content"] for d in data]
-    embeddings = embedder.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
-    return data, embeddings
-
-def semantic_search(query, data, embeddings, top_k=3):
-    q_emb = embedder.encode([query], convert_to_numpy=True, normalize_embeddings=True)[0]
-    sims = np.dot(embeddings, q_emb)
-    top_idx = sims.argsort()[-top_k:][::-1]
-    return [data[i] for i in top_idx]
